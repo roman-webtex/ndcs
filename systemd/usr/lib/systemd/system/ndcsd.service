@@ -1,0 +1,16 @@
+[Unit]
+Description=Network Document Content Search service daemon
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+ExecStart=/home/roman/bin/ndcsd
+ExecStop=/etc/init.d/ndcsd stop
+ExecReload=/etc/init.d/ndcsd reload
+RestartSec=1
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+Alias=ndcsd.service

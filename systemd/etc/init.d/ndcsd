@@ -1,0 +1,43 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:		ndcsd
+# Required-Start:	$all
+# Required-Stop:
+# Default-Start:	2 3 4 5
+# Default-Stop:		0 1 6
+# Short-Descrioption:	Network Document Content Search Daemon
+### END INIT INFO
+
+PIDFILE=/var/run/ndcsd.pid
+
+. /lib/lsb/init-functions
+
+case "$1" in
+    start)
+	log_daemon_msg "Starting find service..." "ndcsd"
+	if ( start-stop-daemon --start --oknodo --quiet --pidfile ${PIDFILE} --exec /home/roman/bin/ndcsd ) ; then
+	    log_end_msg 0
+	else
+	    log_end_msg 1
+	fi
+	;;
+    stop)
+	log_daemon_msg "Stopping find service..." "ndcsd"
+	echo ">>>STOP<<<" | nc localhost 7474
+        log_end_msg 0
+	;;
+    reload)
+	log_daemon_msg "Stopping find service..." "ndcsd"
+	echo ">>>STOP<<<" | nc localhost 7474
+	log_daemon_msg "Starting find service..." "ndcsd"
+	if ( start-stop-daemon --start --oknodo --quiet --pidfile ${PIDFILE} --exec /home/roman/bin/ndcsd ) ; then
+	    log_end_msg 0
+	else
+	    log_end_msg 1
+	fi
+	;;
+    *)
+	echo "Usage ndcsd start|stop|reload"
+    ;;
+esac
+

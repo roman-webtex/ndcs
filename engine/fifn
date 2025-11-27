@@ -1,0 +1,237 @@
+#!/bin/bash
+# find text in files (docx, xlsx, xlsm, pdf, images, zip)
+#
+# uses gs and tesseract
+#
+# fif "*.*" test - search test in all files
+# fif "*.*" file1 dir1 dir3 - search patterns from file1 (one pattern per line) in all files except dir1 and dir3
+if [[ $# < 2 ]]; then
+    echo "Usage:"
+    echo "fif [nozip] { \"GLOB\" } { \"PATTERN\" | FILENAME_WHTH_PATTERNS }  [[EXCLUDE_DIR_1]..[EXCLUDE_DIR_N]]"
+    exit
+fi
+
+TEMPDIR="$(mktemp -d /tmp/fif.XXXXXXXXXX)" || exit 1
+PREFIX="\033[1;33m"
+POSTFIX="\033[1;32m"
+ZIPFILE=""
+NOZIP=""
+
+if [[ $1 == "nozip" ]]; then
+   NOZIP=" ! -iwholename \"*.zip\" "
+   shift
+fi
+
+doshow() {
+    ext=$( echo ${1##*.} | tr [:upper:] [:lower:] )
+    result=0
+    case $ext in
+        pdf)
+            DNAME="$(dirname -- `realpath "$1"` )/.fif"
+            TXTDIRNAME=$DNAME/`echo "$(basename -- $1)"`
+            if [[ ! -d $DNAME ]]; then
+                mkdir $DNAME;
+            fi
+                    
+            if [[ ! -d "$TXTDIRNAME" ]]; then
+                mkdir $TXTDIRNAME
+            fi
+
+            if [[ ! -f "$TXTDIRNAME/__fout.txt" ]]; then
+
+                pdftotext -layout -nopgbrk "$1" "$TEMPDIR/__fout.txt" &> /dev/null
+
+                if [[ ! -s "$TEMPDIR/__fout.txt" ]]; then
+                
+                    if [[ ! $( which gs) ]]; then
+                        echo -e "\nGhost Script not installed. Skip PDF"
+                        return
+                    fi
+                
+                    if [[ ! $( which tesseract) ]]; then
+                        echo -e "\ntesseract not installed. Skip PDF OCR"
+                        return
+                    fi
+
+                    gs -sDEVICE=pnggray -dQUIET -dBATCH -dNOPAUSE -sOutputFile="$TEMPDIR/__page-%03d.png" -r300 -f "$1"
+                
+                    for file in $(find $TEMPDIR -name "__page-*.png" | sort); do
+                        echo $file >> "$TEMPDIR/__input"
+                    done 
+
+                    tesseract "$TEMPDIR/__input" "$TEMPDIR/__fout" -l ukr --oem 2  &> /dev/null
+    
+                    find $TEMPDIR -name "__page-*.png" -exec rm {} \;
+                    rm "$TEMPDIR/__input"
+                    cp "$TEMPDIR/__fout.txt" "$TXTDIRNAME/__fout.txt" 
+                else
+                    cp "$TEMPDIR/__fout.txt" "$TXTDIRNAME/__fout.txt" 
+                fi
+            else
+                cp "$TXTDIRNAME/__fout.txt" "$TEMPDIR/__fout.txt" 
+            fi
+
+            for part in $str; do
+                result=$(grep -E -ci "$part" "$TEMPDIR/__fout.txt")
+                if [[ $result > 0 ]]; then
+                    echo "${1} > $part - $result"
+                    if [[ $ZIPFILE != "" ]]; then
+                        echo "$ZIPFILE :" >> "$TEMPDIR/__result.all"
+                    fi
+                    echo "${1} - $part : $result" >> "$TEMPDIR/__result.all"
+                fi
+            done
+            ;;
+        doc|xls)
+            if [[ `head -c 2 ${1}` != "PK" ]]; then
+                for part in $str; do
+                    result=$(catdoc "${1}" | grep -E -ci "$part")
+                    if [[ $result > 0 ]]; then
+                        echo "${1} > $part - $result"
+                        echo "${1} - $part : $result" >> "$TEMPDIR/__result.all"
+                    fi
+                done
+            else
+                for part in $str; do
+                    result=$(unzip -c "${1}" | grep -E -ci "$part")
+                    if [[ $result > 0 ]]; then
+                        echo "${1} > $part - $result"
+                        if [[ $ZIPFILE != "" ]]; then
+                            echo "$ZIPFILE :" >> "$TEMPDIR/__result.all"
+                        fi
+                        echo "${1} - $part : $result" >> "$TEMPDIR/__result.all"
+                    fi
+                done
+            fi
+            ;;
+        docx|xlsx|xlsm|ods|odt)
+            if [[ `head -c 2 ${1}` != "PK" ]]; then
+                for part in $str; do
+                    result=$(catdoc "${1}" | grep -E -ci "$part")
+                    if [[ $result > 0 ]]; then
+                        echo "${1} > $part - $result"
+                        if [[ $ZIPFILE != "" ]]; then
+                            echo "$ZIPFILE :" >> "$TEMPDIR/__result.all"
+                        fi
+                        echo "${1} - $part : $result" >> "$TEMPDIR/__result.all"
+                    fi
+                done
+            else
+                for part in $str; do
+                    result=$(unzip -c "${1}" | grep -E -ci "$part")
+                    if [[ $result > 0 ]]; then
+                        echo "${1} > $part - $result"
+                        if [[ $ZIPFILE != "" ]]; then
+                            echo "$ZIPFILE :" >> "$TEMPDIR/__result.all"
+                        fi
+                        echo "${1} - $part : $result" >> "$TEMPDIR/__result.all"
+                    fi
+                done
+            fi
+            ;;
+        jpg|jpeg|png|tiff)
+            if [[ ! $( which tesseract) ]]; then
+                echo -e "\ntesseract not installed. Skip Image OCR"
+                return
+            fi
+
+            DNAME="$(dirname -- `realpath "$1"` )/.fif"
+                
+            if [[ ! -d $DNAME ]]; then
+                mkdir $DNAME;
+            fi
+                
+            TXTDIRNAME=$DNAME/`echo "$(basename -- $1)"`
+                
+            if [[ ! -f "$TXTDIRNAME/__fout.txt" ]]; then
+
+                mkdir $TXTDIRNAME
+
+                tesseract "$1" "$TEMPDIR/__fout" -l ukr --oem 2 &> /dev/null
+    
+                cp "$TEMPDIR/__fout.txt" "$TXTDIRNAME/__fout.txt" 
+            else
+                cp "$TXTDIRNAME/__fout.txt" "$TEMPDIR/__fout.txt"
+            fi
+
+            for part in $str; do
+                result=$(grep -E -ci "$part" "$TEMPDIR/__fout.txt")
+                if [[ $result > 0 ]]; then
+                    echo "${1} > $part - $result"
+                    if [[ $ZIPFILE != "" ]]; then
+                        echo "$ZIPFILE :" >> "$TEMPDIR/__result.all"
+                    fi
+                    echo "${1} - $part : $result" >> "$TEMPDIR/__result.all"
+                fi
+            done
+
+            ;;
+        zip)
+            ZIPFILE="$1"
+            echo
+            local ARCDIR=$TEMPDIR/`date "+%N"`
+            mkdir $ARCDIR
+            7z e "$1" -o$ARCDIR  &> /dev/null
+            local unzArray=($( find $ARCDIR -type f | sort ))
+            local a=0
+            for ((a=0; a<${#unzArray[@]}; a++ )); do
+                echo -e -n "\r"
+                echo -e -n "\033[K"
+                printf '\t %-110s' $(basename -- "${unzArray[$a]}")
+                doshow "${unzArray[$a]}"
+            done
+            rm -rf $ARCDIR
+            ZIPFILE=""
+            ;;
+        *)
+            for part in $str; do
+                result=$(grep -E -ci "$part" "${1}")
+                if [[ $result > 0 ]]; then
+                    echo "${1} > $part - $result"
+                    if [[ $ZIPFILE != "" ]]; then
+                        echo "$ZIPFILE :" >> "$TEMPDIR/__result.all"
+                    fi
+                    echo "${1} - $part : $result" >> "$TEMPDIR/__result.all"
+                fi
+            done
+            ;;
+    esac
+
+    if [[ -f "$TEMPDIR/__fout.txt" ]]; then
+        rm "$TEMPDIR/__fout.txt"
+    fi
+}
+
+OLDIFS="$IFS"
+IFS=$'\n'
+
+scr=". -type f -iwholename \"$1\" $NOZIP -size +1k ! -ipath \"./*.fif*\"  ! -ipath \"./*Резол_*\" "
+if [[ -f $2 ]]; then
+    str=$( cat $2 )
+else
+    str=$( echo $2 | sed 's/ //g' )
+fi
+
+for ignor in ${@:3}; do
+    scr="${scr} ! -ipath \"./${ignor}*\" "
+done
+
+resArray=($( echo $scr | xargs find | sort ))
+
+echo "Всього :" ${#resArray[@]}
+
+for (( i=0; i<${#resArray[@]}; i++ )); do
+    echo :$(( i+1 ))
+    doshow "${resArray[$i]}"
+done
+
+IFS="$OLDIFS"
+
+if [[ -f $TEMPDIR/__result.all ]]; then
+    echo "Знайдено $(cat $TEMPDIR/__result.all | wc -l)"
+    rm $TEMPDIR/__result.all
+else
+    echo "Не знайдено - $2"
+fi
+
+rm -rf $TEMPDIR
