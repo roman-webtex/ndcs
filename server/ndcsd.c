@@ -1,3 +1,10 @@
+/*
+ * Copyright (C) 2025 Roman Dmytrenko <roman.webtex@gmail.com>
+ *
+ *  NDCS server. v.0.0.2
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>

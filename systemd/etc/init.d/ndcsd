@@ -1,4 +1,12 @@
 #!/bin/bash
+##################################################################
+# Copyright (C) 2025 Roman Dmytrenko <roman.webtex@gmail.com>
+#
+# NDCS service. v.0.0.2
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+##################################################################
+#
 ### BEGIN INIT INFO
 # Provides:		ndcsd
 # Required-Start:	$all

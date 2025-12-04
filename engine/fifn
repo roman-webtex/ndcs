@@ -1,7 +1,16 @@
 #!/bin/bash
+###########################################################################################
+#
+#  Copyright (C) 2024-2025 Roman Dmytrenko <roman.webtex@gmail.com>
+# 
+#   NDCS engine v.0.1.0
+# 
+#  SPDX-License-Identifier: GPL-3.0-or-later
+# 
+###########################################################################################
 # find text in files (docx, xlsx, xlsm, pdf, images, zip)
 #
-# uses gs and tesseract
+# uses gs, pdftotext and tesseract
 #
 # fif "*.*" test - search test in all files
 # fif "*.*" file1 dir1 dir3 - search patterns from file1 (one pattern per line) in all files except dir1 and dir3

@@ -1,4 +1,13 @@
 #!/bin/wish
+##################################################################
+#
+# Copyright (C) 2025 Roman Dmytrenko <roman.webtex@gmail.com>
+#
+#  NDCS TCL client. v.0.0.1
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+##################################################################
 encoding system utf-8
 
 package require Tk
@@ -75,7 +84,8 @@ proc buildMainWindow {} {
             {fraTable.sbv fraTable.tblMain L - - {pack -side left -after %w}}
             {fraTable.sbh fraTable.tblMain T - - {pack -side left -before %w}}
             {fraButton - - - - {pack -side top -fill x -expand 0 -padx 5 -pady 3} {-relief flat}}
-            {fraButton.butOk - - - - {pack -side right -padx 5 -pady 3} {-t "Розпочати" -com startSearch }}
+            {fraButton.butOk - - - - {pack -side left -padx 5 -pady 3} {-t "Розпочати" -com startSearch }}
+            {fraButton.butView - - - - {pack -side left -padx 5 -pady 3} {-t "Перегляд" -com openFileAction }}
             {fraButton.butCancel fraButton.butOk L 1 1 {pack -side right -padx 5 -pady 3 } {-t "Відмінити" -com exit}}
         }
 
@@ -89,7 +99,7 @@ proc buildMainWindow {} {
         
         bind .mainFrame <F10> {exit}
         bind .mainFrame <Control-q> {exit}
-        bind .mainFrame <Double-Button-1> {openFileAction}
+#        bind .mainFrame <Double-Button-1> {openFileAction}
         wm protocol .mainFrame WM_DELETE_WINDOW {prog_exit}
 }
 

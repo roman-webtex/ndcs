@@ -1,5 +1,16 @@
+/*
+ * Copyright (C) 2025 Roman Dmytrenko <roman.webtex@gmail.com>
+ *
+ *  NDCS GTK+ client. v.0.0.2
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 #include <gtk/gtk.h>
 #include <unistd.h>
+#include <wchar.h>
+#include <glib/gprintf.h>
+#include <locale.h>
+#include <gtk/gtkwidget.h>
 
 #if defined(__WIN32)
 #include <winsock2.h> 
@@ -9,7 +20,14 @@
 #include <sys/socket.h> 
 #endif
 
+#define version 0.0.2
 #define INI_FILE "ndcsclient.conf"
+
+struct _app_data {
+    GtkWidget *m_win;
+    GtkWidget *pgb;
+    GtkWidget *flist;
+};
 
 struct search_config {
     gchar *search_directory;
@@ -26,6 +44,7 @@ struct client_config {
 
 struct search_config app_search_config, *pointer_app_search_config = &app_search_config;
 struct client_config app_config, *pointer_client_config = &app_config;
+struct _app_data app_data, *p_app_data = &app_data;
 
 /*-----------------------------------------------------------------------------------------*/
 int read_ini_file() {
@@ -118,7 +137,6 @@ static void get_search_directory (GtkWidget *widget, gpointer data)
 #if !defined(__WIN32)
     gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dialog), pointer_client_config->base_path);
 #endif
-
     g_signal_connect(dialog, "response", G_CALLBACK(on_search_directory_select), data);
     gtk_widget_show(dialog);
 }
@@ -130,7 +148,7 @@ static void container_remove_child(GtkWidget *widget, gpointer data)
 }
 
 /*-----------------------------------------------------------------------------------------*/
-static void insert_row(GtkWidget *list, gchar* text)
+static void insert_row(GtkWidget *list, char* text)
 {
     GtkListBox *lbox = GTK_LIST_BOX(list);
     GtkWidget *list_box_row = gtk_list_box_row_new();
@@ -149,14 +167,20 @@ static void search_loop(GtkWidget *widget, gpointer f_list)
     struct sockaddr_in server_addr;
     char* directory = pointer_app_search_config->search_directory;
     gint path_length = strlen(pointer_client_config->base_path); 
-    int client_fp, status, j=0, i=0;
+    int client_fp, status, j=0, i=0, count;
     char  fif_message[256] = { 0 };
     char  buffer[1024] = { 0 };
     char  resp[256] = { 0 };
     char* p_buffer = buffer;
     char* p_resp = resp;
     char sep[] = ": "; 
+    double all, value;
+    gchar **lines;
 
+    GdkWindow *window = gtk_widget_get_parent_window (GTK_WIDGET (f_list));
+    GdkCursor *cursor = gdk_cursor_new_from_name(gdk_display_get_default(), "progress");
+    gdk_window_set_cursor (window, cursor);
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(p_app_data->pgb), 0.0);
     gtk_container_foreach(GTK_CONTAINER(f_list), container_remove_child, NULL);
 
     while (directory[path_length] != '\0') {
@@ -195,14 +219,24 @@ static void search_loop(GtkWidget *widget, gpointer f_list)
             *p_resp++ = *p_buffer++ ;
             if(*p_buffer == '\n') {
                 *p_resp = '\0';
+                lines = g_strsplit(resp, ":", -1);
                 if(resp[0] != sep[0] && resp[0] != sep[1]) {
+                    if(strcmp(lines[0],"Всього ")==0) {
+                        all = (double) atoi(g_utf8_substring (lines[1], 1, strlen(lines[1])));
+                    }
                     insert_row(f_list, resp);
+                } else {
+                    value = ((double)atoi(lines[1]))/all;
+                    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(p_app_data->pgb), value);
                 }
                 memset(resp, 0, 256*sizeof(char));
                 p_resp = resp;
                 *p_buffer++;
             }
             i++;
+            while (gtk_events_pending()) {
+                gtk_main_iteration_do(FALSE);
+            }
         }
         memset(resp, 0, 256*sizeof(char));
         p_resp = resp;
@@ -210,17 +244,25 @@ static void search_loop(GtkWidget *widget, gpointer f_list)
         p_buffer=buffer;
     }
     close(client_fp);
+
+    cursor = gdk_cursor_new_from_name(gdk_display_get_default(), "default");
+    gdk_window_set_cursor (window, cursor);
 }
 
 /*-----------------------------------------------------------------------------------------*/
 static void show_doc(GtkWidget *widget, gpointer f_list) 
 { 
-    const gchar* filename = "" ;
+    const char* filename;
     char  buffer[255]={ 0 };
     char  temp[1024]={ 0 };
     char  command[1024]={ 0 };
+    g_autoptr (GdkAppLaunchContext) context = NULL;
     char* p_buffer=buffer;
     char* p_temp=temp;
+    GAppInfo* appinfo = NULL;
+    GList* applist = NULL;
+    GFile* file;
+    FILE *fp;
 
     GtkListBox *lbox = GTK_LIST_BOX(f_list);
     GtkListBoxRow *row = gtk_list_box_get_selected_row(lbox);
@@ -244,34 +286,39 @@ static void show_doc(GtkWidget *widget, gpointer f_list)
     while((*p_temp++ = *p_buffer++) !='\0') {
         ;
     }
-    *p_temp++ = '\0';
-    p_temp=temp;
+    *p_temp = '\0';
 
-#if defined(__WIN32)
-    while(*p_temp != '\0') {
-        if(*p_temp == '/') {
-            *p_temp = '\\';
-        }
-        *p_temp++;
-    }
-#endif
+    strcat(command, pointer_app_search_config->search_directory);
+    strcat(command,temp);
+    
+    file = g_file_new_for_path(command);
 
+    command[0] = '\0';
     strcat(command, pointer_client_config->runner);
     strcat(command, " \"");
-    strcat(command, pointer_app_search_config->search_directory);
-    strcat(command, temp);
-    strcat(command, "\"\0");
+    strcat(command, g_file_get_parse_name(file));
+    strcat(command, "\"");
+    
+    context = gdk_display_get_app_launch_context (gdk_display_get_default ());
+    appinfo = g_app_info_create_from_commandline((gchar*) pointer_client_config->runner, NULL, G_APP_INFO_CREATE_NONE, NULL);
+    applist = g_list_prepend(NULL, file);
 
-    g_print("%s\n", command);
-    g_print("%s\n", g_filename_to_utf8(command, -1, NULL, NULL, NULL));
-
-    system(command);
+#if !defined(__WIN32)
+    g_app_info_launch(appinfo, applist, G_APP_LAUNCH_CONTEXT (context), NULL);
+#else
+    if((fp=fopen("start.cmd", "w")) != NULL) {
+        fputs("chcp 65001\n", fp);
+        fputs(command, fp);
+        fclose(fp);
+        system("start.cmd");
+    }
+#endif
 }
 
 /*-----------------------------------------------------------------------------------------*/
 static void activate(GtkApplication * app, gpointer user_data)
 {
-    GtkWidget *win, 
+    GtkWidget *win,
               *vbox_main, 
               *hbox_directory, 
               *hbox_file_mask,
@@ -308,7 +355,6 @@ static void activate(GtkApplication * app, gpointer user_data)
     entry_text_mask= gtk_entry_new();
     
     search_progress= gtk_progress_bar_new();
-    gtk_progress_bar_set_text(GTK_PROGRESS_BAR(search_progress), "Пошук інформації");
     
     scrolled       = gtk_scrolled_window_new(NULL, NULL);
     file_list      = gtk_list_box_new();
@@ -333,7 +379,7 @@ static void activate(GtkApplication * app, gpointer user_data)
     gtk_box_pack_start(GTK_BOX(vbox_main), GTK_WIDGET(hbox_directory), FALSE, TRUE, 1);
     gtk_box_pack_start(GTK_BOX(vbox_main), GTK_WIDGET(hbox_file_mask), FALSE, TRUE, 1);
     gtk_box_pack_start(GTK_BOX(vbox_main), GTK_WIDGET(hbox_text_mask), FALSE, TRUE, 1);
-    gtk_box_pack_start(GTK_BOX(vbox_main), GTK_WIDGET(hbox_progress), FALSE, TRUE, 1);
+    gtk_box_pack_start(GTK_BOX(vbox_main), GTK_WIDGET(hbox_progress), FALSE, TRUE, 5);
     gtk_box_pack_start(GTK_BOX(vbox_main), GTK_WIDGET(hbox_file_list), TRUE, TRUE, 1);
     gtk_box_pack_start(GTK_BOX(vbox_main), GTK_WIDGET(hbox_buttons), FALSE, TRUE, 1);
 
@@ -368,6 +414,10 @@ static void activate(GtkApplication * app, gpointer user_data)
     g_signal_connect (G_OBJECT(entry_file_mask), "focus_out_event", G_CALLBACK (get_file_mask_exit), NULL); 
     g_signal_connect (G_OBJECT(entry_text_mask), "focus_out_event", G_CALLBACK (get_text_mask_exit), NULL); 
     
+    p_app_data->m_win = win;
+    p_app_data->pgb = search_progress;
+    p_app_data->flist = file_list;
+    
     gtk_widget_show_all (win);    
 }
 
@@ -378,7 +428,7 @@ int main(int argc, char *argv[])
     int status = -1;
 
     if (read_ini_file() >= 0) {
-        app = gtk_application_new("com.borysych", G_APPLICATION_DEFAULT_FLAGS);    
+        app = gtk_application_new("com.borysych.ndcsclient", G_APPLICATION_DEFAULT_FLAGS);    
         g_signal_connect (app, "activate", G_CALLBACK (activate), NULL); 
         status = g_application_run (G_APPLICATION (app), argc, argv); 
         g_object_unref (app);    

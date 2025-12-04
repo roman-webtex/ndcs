@@ -8,7 +8,7 @@ dependecy:
 
 you must include "nozip" in command line.
 
-fifn nozip "filemask" "pattern" | pattern file "exclude dir" ... "exclude dir"
+fifn [ nozip ] "filemask" {"pattern" | patterns file} ["exclude dir" ... "exclude dir"]
 
 
   
